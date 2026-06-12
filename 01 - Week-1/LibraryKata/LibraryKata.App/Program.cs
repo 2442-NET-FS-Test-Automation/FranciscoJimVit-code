@@ -18,6 +18,7 @@ public class Program // This defines a public class named "Program". In C#, the 
 
         Program.DataTypesAndOperators();
         ClassExample();
+        OopDemo();
     }
 
     // private - only accessible within the Program class.
@@ -157,5 +158,42 @@ public class Program // This defines a public class named "Program". In C#, the 
         Console.WriteLine($"Cheking out {book1.Checkout()}"); // false
         Console.WriteLine($"Cheking out {book2.Checkout()}"); // true
 
+    }
+
+    public static void OopDemo()
+    {
+        Console.WriteLine("\n\n == OOP Demo == ");
+        
+        LibraryItem[] catalog =
+        {
+            new Book("Dune", "Frank Herbert", 2),
+            new ReferenceBook("The Great Gatsby", "F. Scott Fitzgerald", "summary of the book"),
+            new Magazine("Sports Illustrated", "Various", 10, "Sports Illustrated")
+
+        };
+
+        foreach (LibraryItem item in catalog)
+        {
+            Console.WriteLine(item.Describe());
+        }
+
+        foreach (LibraryItem item in catalog)
+        {
+            if (item is ILendable lendable)
+            {
+                Console.WriteLine($"{item.Title}: chekout -> {lendable.Checkout()}");
+            }
+            else
+            {
+                Console.WriteLine("Reference Only");
+            }
+        }
+
+        Magazine wired = new Magazine("Wired", "Various", 3, "Conde Nast");
+        LibraryItem baseMag = wired;
+
+        Console.WriteLine("== Override vs new on the same object, different ref types == ");
+        Console.WriteLine($"Magazine reference: {wired.Describe()}");
+        Console.WriteLine($"LibraryItem reference: {baseMag.Describe()}");
     }
 }
