@@ -2,13 +2,15 @@
 
 namespace ShopKata.App;
 
+
 public class Program
 {
-    public static void Main(string[] args)
-    {
-        ShopMenu();
-        ShopDemo();
-
+    
+    public static void Main()
+    {   
+        Console.WriteLine("=== Welcome to the Shop! ===");
+        Program.ShopMenu();
+        Program.ShopDemo();
     }
 
     public static void ShopMenu()
@@ -16,11 +18,11 @@ public class Program
         Console.WriteLine("=== Welcome to the Shop! ===");
         
         Console.WriteLine("\n\n=== Shop Menu ===");
-        Console.WriteLine("\n1. Add Products");
-        Console.WriteLine("\n2. sell Products");
-        Console.WriteLine("\n3. restock Products");
-        Console.WriteLine("\n4. View Products");
-        Console.WriteLine("\n5. Exit");
+        Console.WriteLine("1. Add Products");
+        Console.WriteLine("2. sell Products");
+        Console.WriteLine("3. restock Products");
+        Console.WriteLine("4. View Products");
+        Console.WriteLine("5. Exit");
         
     }
 
@@ -68,3 +70,6 @@ public class Program
     }
 
 }
+
+
+
