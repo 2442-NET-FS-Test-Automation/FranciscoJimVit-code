@@ -1,0 +1,4 @@
+<Solution>
+  <Project Path="./ShopKata.Domain/ShopKata.Domain.csproj" />
+  <Project Path="./ShopKata.App/ShopKata.App.csproj" />
+</Solution>
