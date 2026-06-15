@@ -17,8 +17,10 @@ public class Program
         
         Console.WriteLine("\n\n=== Shop Menu ===");
         Console.WriteLine("\n1. Add Products");
-        Console.WriteLine("\n2. View Product");
-        Console.WriteLine("\n3. Exit");
+        Console.WriteLine("\n2. sell Products");
+        Console.WriteLine("\n3. restock Products");
+        Console.WriteLine("\n4. View Products");
+        Console.WriteLine("\n5. Exit");
         
     }
 
@@ -33,9 +35,15 @@ public class Program
                 Console.WriteLine("You selected: Add Products");
                 break;
             case "2":
-                Console.WriteLine("You selected: View Product");
+                Console.WriteLine("You selected: sell Products");
                 break;
             case "3":
+                Console.WriteLine("You selected: restock Products");
+                break;
+            case "4":
+                Console.WriteLine("You selected: View Products");
+                break;
+            case "5":
                 Console.WriteLine("Exiting the shop. Goodbye!");
                 break;
             default:
@@ -46,9 +54,9 @@ public class Program
         // Create a shop and add products to it
         /*
         Shop shop = new Shop();
-        shop.AddProduct(new Product("Apple", 0.5));
-        shop.AddProduct(new Product("Bread", 1.0));
-        shop.AddProduct(new Product("Milk", 1.5));
+        shop.AddProduct(new Product("Apple", 0.5, 10));
+        shop.AddProduct(new Product("Bread", 1.0, 5));
+        shop.AddProduct(new Product("Milk", 1.5, 3));
 
         // Display all products in the shop
         Console.WriteLine("Products available in the shop:");
