@@ -1,6 +1,7 @@
 ﻿// if i Have code from another namespace, I can use the using directive to import it.
 using System.Runtime.InteropServices.Marshalling;
 using Library.Domain;
+using Serilog;
 
 namespace LibraryKata.App; // A namespace is like a bucket or logical container for different related code files. 
 // It helps to organize code and avoid naming conflicts. In this case, "LibraryKata.App" is the namespace for the application code related to the Library Kata.
@@ -14,6 +15,17 @@ public class Program // This defines a public class named "Program". In C#, the 
     // void - it doesn't return any value.
     public static void Main(string[] args) // This is the Main method, which is the entry point of the application. It takes an array of strings as arguments, which can be used to pass command-line arguments to the application.
     {
+
+        // Lets configure Serilog here before any code execution.
+        // Serilog works via a singleton object. Its shared globally
+        // throughout the application, configure once use anywhere
+
+        Log.Logger = new LoggerConfiguration()
+            .MinimumLevel.Information() // Verbose > Debug > Information > Warning > Error > Fatal
+            .WriteTo.Console() // Sink: where do my logs go? console, text file, database, etc?
+            .CreateLogger(); // create the logger based on the config above.
+
+
         // when i call dotnet run in the terminal, it finds the Main method and starts executing the code inside it.
 
         Program.DataTypesAndOperators();
@@ -21,6 +33,13 @@ public class Program // This defines a public class named "Program". In C#, the 
         OopDemo();
 
         CollectionsDemo();
+
+        ExceptionDemo();
+        // In case there are any lingering logs by the time we hit line 41 above
+        // don't just stop execution, write the logs to their sink THEN close the program.
+        Log.CloseAndFlush();
+
+
     }
 
     // private - only accessible within the Program class.
@@ -249,5 +268,77 @@ public class Program // This defines a public class named "Program". In C#, the 
         shelf.TryAdd(catalog._items[1]);
 
         Console.WriteLine($"Trying to add a third thing in our catalog: {shelf.TryAdd(catalog._items[2])}");
+    }
+
+
+
+    /* /////////////////////////////////////////////////////////////////////////////////////////////////////// */
+    public static void ExceptionDemo()
+    {
+        Console.WriteLine("\n\n == Exceptions, patterns, logging == ");
+
+        // by using liskov substitution from SOLID, if I later swap to a SQLLibraryRepo or whatever, 
+        // This is only line I have to change
+        ILibraryRepository repo = new InMemoryLibraryRepository();
+
+        // Injecting our existing repo object to statify LibraryUnitOfWork's dependency
+        IUnitOfWork libraryWork = new LibraryUnitOfWork(repo);
+
+        // Create a book, but using our factory method - notice
+        LibraryItem book = LibraryItemFactory.Create(ItemKind.Book, "The Great Gatsby", "F. Scott Fitzgerald", copies:180);
+
+        repo.Add(book);
+
+        repo.Add(LibraryItemFactory.Create(ItemKind.Book, "To Kill a Mockingbird", "Harper Lee", copies:100));
+
+        libraryWork.Stage("Added 2 items");
+        libraryWork.Commit();
+
+        try
+        {
+            
+            LibraryItem missing = repo.GetById(99);
+            Console.WriteLine(missing.Describe());
+        }
+        catch(ItemNotFoundException ex)
+        {
+            Log.Error($"Lookup failed for {ex.Id}: {ex.Message}");
+        }
+        catch(LibraryException ex)
+        {
+            Log.Error($"Library error occurred: {ex.Message}");
+        }
+        catch(Exception ex)
+        {
+            Log.Error($"Non Library exception: {ex.Message}");
+        }
+        finally // optional, but adding a finally block adds code that runs
+        {// whether an exception is caught or not
+
+            // Code in a finally block will run even if the try ends in a return
+            // useful for DB operations where you want to cleanup but you found the object to return
+            Console.WriteLine("hit out finally block - lookup attempt done");
+        }
+
+        Book noCopies = new Book("Count of Monte Cristo", "Alexandre Dumas", 0);
+
+        try
+        {
+            Borrow(noCopies);
+        }
+        catch(ItemNotAvailableException ex)
+        {
+            Log.Error($"Borrow refused: {ex.Message}");
+        }
+
+    }
+
+    public static void Borrow (Book book)
+    {
+        //
+        if(!book.Checkout())
+        {
+            throw new ItemNotAvailableException("Book is not available for checkout");
+        }
     }
 }
