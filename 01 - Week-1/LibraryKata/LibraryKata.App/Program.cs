@@ -19,6 +19,8 @@ public class Program // This defines a public class named "Program". In C#, the 
         Program.DataTypesAndOperators();
         ClassExample();
         OopDemo();
+
+        CollectionsDemo();
     }
 
     // private - only accessible within the Program class.
@@ -120,8 +122,8 @@ public class Program // This defines a public class named "Program". In C#, the 
         }
         Console.WriteLine("No copies on shelf");
 
-        string myString = "dog";
-        myString = "cat";
+        // string myString = "dog";
+        // myString = "cat";
     }
 
     private static double calculateLateFee(int daysLate) => daysLate * 2;
@@ -195,5 +197,57 @@ public class Program // This defines a public class named "Program". In C#, the 
         Console.WriteLine("== Override vs new on the same object, different ref types == ");
         Console.WriteLine($"Magazine reference: {wired.Describe()}");
         Console.WriteLine($"LibraryItem reference: {baseMag.Describe()}");
+    }
+
+
+    /// Collections Demo stuff
+    
+    private static void CollectionsDemo()
+    {
+        Console.WriteLine("== Collections Demo Stuff == ");
+
+        // Creating a catalog object
+        // because this is backed by a List, it grows and shrinks for us
+        Catalog catalog = new Catalog();
+        
+        //I cloud create my objects
+        Book dune = new Book("Dune", "Frank Herbert", 2);
+        
+        // the add them
+        catalog._items.Add(dune);
+
+        // I can also just call a constructor inside the Add method call
+        // Methods having their arguments satisfied by the return of other methods is a common pattern in C#
+        // and sometimes you'll get like 4-5 callbacks deep in tools like ASP.NET
+        catalog._items.Add(new ReferenceBook("The Hobbit", "J.R.R. Tolkein", "summary of the book"));
+        catalog._items.Add(new Magazine("Sports Illustrated", "Various", 10, "Sports Illustrated"));
+
+        Console.WriteLine($"Catalog holds {catalog._items.Count} items. first is {catalog._items[0].Title}");
+
+        // Enuk + struct use
+        ItemKind kind = ItemKind.Magazine; // example of selecting and enum value
+        ShelfLocation location = new ShelfLocation(3, 12); // struct - looks alot like a class, but it is a Value Type
+
+        Console.WriteLine($"Item kind: {kind}, sits at {location}");
+        
+
+        ///////////////
+        /// Book duneCopy = dune;  // copies the reference
+        /// // Lets say I modify duneCopy, what happens to the data in dune?
+        /// // all we copies was the pointer - these two things are not independent
+        /// 
+        /// ShelfLocation locationCopy = location; // copies the data/fields
+        /// these are not linked in the same way, I can edit the data in one without touching the other
+        ///////////////
+        
+        // Generics: our own Shelf<T> that can hold anything - thought technically all the collections
+        // we used thusfar have been generic classes themselves
+        Shelf<LibraryItem> shelf = new Shelf<LibraryItem>(2);
+        Shelf<int> intShelf = new Shelf<int>(200);
+
+        shelf.TryAdd(catalog._items[0]);
+        shelf.TryAdd(catalog._items[1]);
+
+        Console.WriteLine($"Trying to add a third thing in our catalog: {shelf.TryAdd(catalog._items[2])}");
     }
 }
