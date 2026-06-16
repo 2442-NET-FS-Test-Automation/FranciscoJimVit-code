@@ -15,7 +15,7 @@ public interface ILibraryRepository
     // - Update
     void Update(LibraryItem item);
     // - Delete 
-    void Remove(int id);
+    bool Remove(int id);
 
 
 }
