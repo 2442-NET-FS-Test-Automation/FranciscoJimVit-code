@@ -16,9 +16,8 @@ public class Program
     static List<ShopProducts> productsList = new List<ShopProducts>
     {
         new Fruit("Apple", 0.5f, 10, new DateTime(2026, 12, 31)),
-        new Book("The Great Gatsby", 10.99f, 5, "F. Scott Fitzgerald", "Fiction"),
-        new Fruit("Banana", 0.3f, 15, new DateTime(2026, 11, 30)),
-        new Fruit("Orange", 0.4f, 12, new DateTime(2026, 11, 15))
+        new Drink("Soda", 2.5f, 20, 330),
+        new Book("1984", 12.99f, 3, "George Orwell", "Dystopian Fiction")
     };
     
     public static void ShopMenu()
@@ -76,8 +75,9 @@ public class Program
         Console.WriteLine("Adding products to the shop...");
 
         // append the new products to the existing list
-        productsList.Add(new Fruit("Grape", 1.2f, 8, new DateTime(2026, 12, 15)));
-        productsList.Add(new Book("1984", 12.99f, 3, "George Orwell", "Dystopian Fiction"));
+        productsList.Add(new Fruit("Orange", 0.4f, 12, new DateTime(2026, 11, 15)));
+        productsList.Add(new Drink("Juice", 2.5f, 20, 1000));
+        productsList.Add(new Book("Aquiles", 15.99f, 5, "Homer", "Epic Poetry"));
         
     }
 
