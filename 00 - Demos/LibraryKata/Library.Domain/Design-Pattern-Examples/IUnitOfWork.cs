@@ -1,4 +1,4 @@
-namespace Library.Domain;
+namespace LibraryKata.Domain;
 
 public interface IUnitOfWork
 {
@@ -7,8 +7,5 @@ public interface IUnitOfWork
 
     void Stage(string change); // a method to allow us to stage changes - like "git add"
 
-    int Commit(); // a method to actually commit those changes
-
-
-
+    int Commit(); // a method to actually commit those changes 
 }
