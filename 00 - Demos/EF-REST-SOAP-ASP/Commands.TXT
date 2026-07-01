@@ -1,0 +1,5 @@
+Commands Entity Framework
+
+dotnet ef migrations add OrdersCustomers --project Library.Data --startup-project Library.Api
+dotnet ef migrations add AnnotatedCustomer --project Library.Data --startup-project Library.Api
+dotnet ef database update --project Library.Data --startup-project Library.Api
