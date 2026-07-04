@@ -1,0 +1,4 @@
+<Solution>
+  <Project Path="TicketHub.Api/TicketHub.Api.csproj" />
+  <Project Path="TicketHub.Data/TicketHub.Data.csproj" />
+</Solution>
