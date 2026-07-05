@@ -58,6 +58,38 @@ public class TicketHubDbContext : DbContext
             /* Non-Key Index */
             entity.HasIndex(b => b.Status);
         });
+
+
+        /* ******************************************************************* */
+        /*          After configurate entities, is necesary Seed the BD        */
+        /* ******************************************************************* */
+
+        /* 1. Clear & recreate BD, (Reset endpoint that restores baseline). */
+        /* Deployed step on Program.cs with app.MapPost("/seed" */
+
+        /* 2. Seed Test Clients */
+        modelBuilder.Entity<Customer>().HasData(
+            new Customer { Id = 1, Name = "Alice Vance", Email = "alice@tickets.com" },
+            new Customer { Id = 2, Name = "Bob Miller", Email = "bob@tickets.com" },
+            new Customer { Id = 3, Name = "Charlie Smith", Email = "charlie@tickets.com" },
+            new Customer { Id = 4, Name = "Diana Prince", Email = "diana@tickets.com" }
+        );
+
+        /* 3. Seed of Seats/Sections (ConcertSeats) */
+        /* NOTE: Not assigned 'Stock' navigatiom property here, It'll be seeded separately */
+        modelBuilder.Entity<ConcertSeat>().HasData(
+            new ConcertSeat { Id = 1, Sku = "VIP-ZONE", Name = "Sección VIP Frontal", Price = 250.00m },
+            new ConcertSeat { Id = 2, Sku = "GEN-FLOOR", Name = "Pista General de Pie", Price = 85.00m },
+            new ConcertSeat { Id = 3, Sku = "BALCONY-A", Name = "Balcón Preferente A", Price = 120.00m }
+        );
+
+        /* 4. Seed of inventory (TicketStocks) */
+        /* Links each inventory with it's ConcertSeat using property ConcertSeatId */
+        modelBuilder.Entity<TicketStock>().HasData(
+            new TicketStock { Id = 1, ConcertSeatId = 1, QuantityOnHand = 50 },
+            new TicketStock { Id = 2, ConcertSeatId = 2, QuantityOnHand = 500 },
+            new TicketStock { Id = 3, ConcertSeatId = 3, QuantityOnHand = 150 }
+        );
     }
 
 

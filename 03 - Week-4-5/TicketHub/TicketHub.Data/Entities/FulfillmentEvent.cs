@@ -17,5 +17,5 @@ public class FulfillmentEvent
     [Required, StringLength(500)]
     public string Message { get; set; } = null!;
 
-    public DateTime TimeStamp { get; set; }
+    public DateTime Timestamp { get; set; }
 }
