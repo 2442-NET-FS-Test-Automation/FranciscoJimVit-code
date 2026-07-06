@@ -28,11 +28,13 @@ public class FulfillmentService : IFulfillmentService
     // If we need a DbContext or DbContextFactory or Logger or any other dependency 
     // we DO NOT instantiate one here, we ask for one via the Constructor
     private readonly IDbContextFactory<LibraryDbContext> _factory; // holds my factory
+    private readonly BurstPlanner _planner; //holds my BurstPlanner object
 
     // The factory in the constructor arguments list comes from the ASP.NET DI Container
-    public FulfillmentService(IDbContextFactory<LibraryDbContext> factory)
+    public FulfillmentService(IDbContextFactory<LibraryDbContext> factory, BurstPlanner planner)
     {
         _factory = factory;
+        _planner = planner;
     }
 
     // This method is going to handle fulfillment - its gonna be a bit long. Which is why we didn't 
@@ -48,7 +50,7 @@ public class FulfillmentService : IFulfillmentService
 
         // Lets create that dictionary with the productId Key and the OrderId value
         // yay for LINQ/Collections namespace
-        var requested = order.Lines.ToDictionary(l => l.ProductId, l => l.OrderId);
+        var requested = order.Lines.ToDictionary(l => l.ProductId, l => l.Quantity);
 
         // creating a flag for "can i continue fulfilling this order"
         bool canFulfill = true; 
@@ -111,8 +113,8 @@ public class FulfillmentService : IFulfillmentService
     {
         
         // This is that RowVersion Change Tracker entry retry from yesterday
-        // Lets set max retries to 3 - by wrapping everything in a loop
-        for (int attempt = 0; ; attempt++)
+        // NEW: Loop forever until we run out of stock
+        while (true)
         {
             
             // Our loop as written never exits - it does increment attempt for us.
@@ -127,7 +129,7 @@ public class FulfillmentService : IFulfillmentService
             // We can tell our try catch how many times to handle this exception for us
             // After 3 attempts - we won't enter the catch. It bubbles up to wherever this method 
             // was called
-            catch (DbUpdateConcurrencyException ex) when (attempt < 3)
+            catch (DbUpdateConcurrencyException ex) 
             {
                 
                 // Retry logic - remember that Change Tracker stuff?
@@ -152,7 +154,7 @@ public class FulfillmentService : IFulfillmentService
                         int desiredAmount = requestedByProductId[inv.ProductId];
 
                         // Re-check on the fresh stock - don't blindly trust it
-                        if (freshValue < desiredAmount) return false;
+                        if (freshValue < desiredAmount) return false; // this is now our exit condition
                         inv.CurrentStock = freshValue - desiredAmount;
                     }
                 }
@@ -161,9 +163,24 @@ public class FulfillmentService : IFulfillmentService
     }
 
     public async Task<BurstResult> FulfillBurstAsync(IEnumerable<int> orderIds, CancellationToken ct)
-    {
+    {   
+        // Grabbing all my orderIds
+        List<int> idList = orderIds.ToList();
+
+        List<Order> orders; // place to store my orders
+        
+        // Calling on a dbcontext that we discard after we're done
+        await using (var db = await _factory.CreateDbContextAsync(ct))
+        {   // Look in our db, grab every order that appears in our idList
+            orders = await db.Orders.Where(o => idList.Contains(o.Id)).ToListAsync();
+        }
+
+        // Calling on our planning logic inside BurstPlanner
+        // planned contains our expedited/priority first order
+        var planned = _planner.OrderByPriority(orders);
+        
         // we are just going to piggyback off of FulfilOneAsync - no need to rewrite logic we can just call it again
-        var tasks = orderIds.Select(id => FulfillOneAsync(id, ct)); // each call will get its own dbContext
+        var tasks = planned.Select(id => FulfillOneAsync(id, ct)); // each call will get its own dbContext
 
         // Await here until all tasks in the collection are complete
         var results = await Task.WhenAll(tasks);
