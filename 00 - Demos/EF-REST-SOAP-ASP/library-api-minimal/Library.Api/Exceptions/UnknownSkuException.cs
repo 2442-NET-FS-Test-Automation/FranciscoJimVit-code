@@ -1,11 +1,11 @@
 namespace Library.Api.Fulfillment;
 
-public sealed class unknownSkuException : Exception
+public sealed class UnknownSkuException : Exception
 {
-    public string Sku {get;}
-
-    public unknownSkuException(string sku) : base ($"Unknown SKU: {sku}")
+    public string Sku { get; }
+    
+    public UnknownSkuException(string sku) : base($"Unknown SKU: {sku}")
     {
         Sku = sku;
-    }
+    } 
 }
