@@ -104,21 +104,28 @@ public class InventoryController : ControllerBase
         var created = await _service.AddAsync(newInv);
         var response = _mapper.Map<InventoryDto>(created);
 
+        // CreatedAt (201) works a little differently from our other response ActionResults
+        // Created at needs to know how to find the newly created resource - so we tell it
+        // Use the GetBySku controller method (literally the one above) and use the information
+        // in response to build the URI string
         return CreatedAtAction(nameof(GetBySku), new { sku = response.Sku}, response);
     }
 
     [HttpDelete("{sku}")]
-    public async Task<ActionResult> Delete (string sku)
+    public async Task<ActionResult> Delete(string sku)
     {
         bool isDeleted = await _service.RemoveAsync(sku);
+
         if (isDeleted)
         {
-            return NoContent();
+            return NoContent(); // 204 - No content - it WAS there, not anymore
         }
         else
         {
-            return NotFound();
-            // return StatusCode(404, "NotFound");
+            return NotFound(); // 404 - couldn't delete it because your sku was wrong
+
+            // Custom return message with StatusCode
+            //return StatusCode(404, "Not found");
         }
     }
 

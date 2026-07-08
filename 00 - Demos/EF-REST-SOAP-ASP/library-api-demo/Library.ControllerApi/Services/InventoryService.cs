@@ -34,14 +34,13 @@ public class InventoryService : IInventoryService
     public Task<InventoryItem> AddAsync(InventoryCreateDto dto)
     {   
         // This is going to need a DTO - we'll return to this
-        return _repo.AddInventoryItemAsync(dto.sku, dto.Name, dto.price, dto.stock);
+        return _repo.AddInventoryItemAsync(dto.Sku, dto.Name, dto.Price, dto.CurrentStock);
     }
 
     public Task<bool> RemoveAsync(string sku)
     {
         return _repo.RemoveBySkuAsync(sku);
     }
-
 
 
 }
