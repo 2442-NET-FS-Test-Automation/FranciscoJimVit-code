@@ -4,7 +4,6 @@ using TicketHub.Data.Entities;
 using Serilog;
 
 Log.Logger = new LoggerConfiguration()
-    .MinimumLevel.Information() /* minimum lvl of logs to capture */
     .WriteTo.Console() /* Still having console logs */
     .WriteTo.File(
         path: "Logs/tickethub-log-.txt",
@@ -51,12 +50,12 @@ try
         ILogger<Program> logger) =>
     {
         logger.LogInformation("Started seeding database");
-        using var context = await contextFactory.CreateDbContextAsync();
+        using var db = await contextFactory.CreateDbContextAsync();
 
         /* At time to destroy & recreate, EF Core reeds method OnModelCreating
         & insert data from .HasData() automátically. */
-        await context.Database.EnsureDeletedAsync();
-        await context.Database.EnsureCreatedAsync();
+        await db.Database.EnsureDeletedAsync();
+        await db.Database.EnsureCreatedAsync();
 
         return Results.Ok(new { message = "Database reset successfully! Baseline data inserted via Model Seeds." });
     });
@@ -66,10 +65,10 @@ try
         ILogger<Program> logger) =>
     {
         logger.LogInformation("Started ConcertSeats (Inventory) get from database");
-        using var context = await contextFactory.CreateDbContextAsync();
+        using var db = await contextFactory.CreateDbContextAsync();
 
         /* Consult seats charging (Include) its corresponding stock */
-        var inventory = await context.ConcertSeats
+        var inventory = await db.ConcertSeats
             .Include(cs => cs.Stock)
             .Select(cs => new
             {
@@ -90,9 +89,9 @@ try
         ILogger<Program> logger) =>
     {
         logger.LogInformation("Started reports/top-products get from database");
-        using var context = await contextFactory.CreateDbContextAsync();
+        using var db = await contextFactory.CreateDbContextAsync();
 
-        var topSeats = await context.BookingLines
+        var topSeats = await db.BookingLines
             .Where(line => line.Booking.Status == BookingStatus.Fulfilled) /* only sum what was actually sold */
             .GroupBy(line => new { line.ConcertSeat.Sku, line.ConcertSeat.Name })
             .Select(group => new
@@ -112,9 +111,9 @@ try
         ILogger<Program> logger) =>
     {
         logger.LogInformation("Started reports/top-curstomers get from database");
-        using var context = await contextFactory.CreateDbContextAsync();
+        using var db = await contextFactory.CreateDbContextAsync();
 
-        var topCustomers = await context.BookingLines
+        var topCustomers = await db.BookingLines
             .Where(line => line.Booking.Status == BookingStatus.Fulfilled)
             .GroupBy(line => new { line.Booking.Customer.Name, line.Booking.Customer.Email })
             .Select(group => new
@@ -134,10 +133,10 @@ try
         ILogger<Program> logger) =>
     {
         logger.LogInformation("Started reports/fulfillment-rate get from database");
-        using var context = await contextFactory.CreateDbContextAsync();
+        using var db = await contextFactory.CreateDbContextAsync();
 
         /* Total COuntof orders per each status */
-        var totals = await context.Bookings
+        var totals = await db.Bookings
             .GroupBy(b => b.Status)
             .Select(group => new { Status = group.Key, Count = group.Count() })
             .ToListAsync();
@@ -163,7 +162,7 @@ try
     int customerId, int seatId, int quantityRequested)
     {
         /* each orden has its own exclusive short-term DbContext */
-        using var context = await contextFactory.CreateDbContextAsync();
+        using var db = await contextFactory.CreateDbContextAsync();
 
         /* Creating reservation header in Pendient state */
         var booking = new Booking
@@ -173,8 +172,8 @@ try
             Status = BookingStatus.Pending,
             CreatedAt = DateTime.UtcNow
         };
-        context.Bookings.Add(booking);
-        await context.SaveChangesAsync();
+        db.Bookings.Add(booking);
+        await db.SaveChangesAsync();
 
         /* Adding detailed line requesting tickets */
         var line = new BookingLine
@@ -183,22 +182,22 @@ try
             ConcertSeatId = seatId,
             Quantity = quantityRequested
         };
-        context.BookingLines.Add(line);
-        await context.SaveChangesAsync();
+        db.BookingLines.Add(line);
+        await db.SaveChangesAsync();
 
-        int maxRetries = 3;
+        int maxRetries = 1;
         int retryCount = 0;
         bool processed = false;
 
         while (!processed && retryCount < maxRetries)
         {
             /* Start a explicit transaction to assure the atomicity (all or nothing) */
-            using var transaction = await context.Database.BeginTransactionAsync();
+            using var transaction = await db.Database.BeginTransactionAsync();
 
             try
             {
                 /* 1. take the real inventory directly from the DB */
-                var stock = await context.TicketStocks
+                var stock = await db.TicketStocks
                     .FirstOrDefaultAsync(ts => ts.ConcertSeatId == seatId);
 
                 if (stock == null)
@@ -217,7 +216,7 @@ try
                     booking.CompletedAt = DateTime.UtcNow;
 
                     /* let a registry in the audit */
-                    context.FulfillmentEvents.Add(new FulfillmentEvent
+                    db.FulfillmentEvents.Add(new FulfillmentEvent
                     {
                         BookingId = booking.Id,
                         Type = "Success",
@@ -227,7 +226,7 @@ try
 
                     /* Try save changes. if other task modified the same stock
                     An exception ocurrs DbUpdateConcurrencyException by the RowVersion. */
-                    await context.SaveChangesAsync();
+                    await db.SaveChangesAsync();
                     await transaction.CommitAsync(); /* Confirm the DB changes */
                     processed = true;
 
@@ -239,7 +238,7 @@ try
                     booking.Status = BookingStatus.Backordered;
                     booking.CompletedAt = DateTime.UtcNow;
 
-                    context.FulfillmentEvents.Add(new FulfillmentEvent
+                    db.FulfillmentEvents.Add(new FulfillmentEvent
                     {
                         BookingId = booking.Id,
                         Type = "Backorder",
@@ -247,7 +246,7 @@ try
                         Timestamp = DateTime.UtcNow
                     });
 
-                    await context.SaveChangesAsync();
+                    await db.SaveChangesAsync();
                     await transaction.CommitAsync();
                     processed = true;
 
@@ -261,7 +260,7 @@ try
                 await transaction.RollbackAsync(); /* unDo the actual try */
 
                 /* Forcing EFCore to reload the fresh data from the DB to the next try */
-                context.ChangeTracker.Clear();
+                db.ChangeTracker.Clear();
 
                 Console.WriteLine($"[CONFLICT] Order {booking.Id} hit a conflict. Retrying ({retryCount}/{maxRetries})...");
 

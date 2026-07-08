@@ -10,16 +10,16 @@ public class TicketHubDbContext : DbContext
     Example: DB engine, connection string, behavios etc */
     public TicketHubDbContext(DbContextOptions<TicketHubDbContext> options) : base(options) {}
 
-    public DbSet<Customer> Customers { get; set; } = null!;
-    public DbSet<ConcertSeat> ConcertSeats { get; set; } = null!;
-    public DbSet<TicketStock> TicketStocks { get; set; } = null!;
-    public DbSet<Booking> Bookings { get; set; } = null!;
-    public DbSet<BookingLine> BookingLines { get; set; } = null!;
-    public DbSet<FulfillmentEvent> FulfillmentEvents { get; set; } = null!;
+    public DbSet<Customer> Customers => Set<Customer>();
+    public DbSet<ConcertSeat> ConcertSeats => Set<ConcertSeat>();
+    public DbSet<TicketStock> TicketStocks => Set<TicketStock>();
+    public DbSet<Booking> Bookings => Set<Booking>();
+    public DbSet<BookingLine> BookingLines => Set<BookingLine>();
+    public DbSet<FulfillmentEvent> FulfillmentEvents => Set<FulfillmentEvent>();
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
-        base.OnModelCreating(modelBuilder);
+        // base.OnModelCreating(modelBuilder);
 
         /* Customer Configuration */
         modelBuilder.Entity<Customer>(entity =>
