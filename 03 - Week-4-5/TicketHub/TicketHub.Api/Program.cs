@@ -1,37 +1,49 @@
 using Microsoft.EntityFrameworkCore;
 using TicketHub.Data;
+
 using TicketHub.Data.Entities;
 using Serilog;
+/* ******************************************************************************** */
 
-Log.Logger = new LoggerConfiguration()
-    .WriteTo.Console() /* Still having console logs */
-    .WriteTo.File(
-        path: "Logs/tickethub-log-.txt",
-        rollingInterval: RollingInterval.Day, /* new file everyday automaticaly */
-        outputTemplate: "{Timestamp:yyyy-MM-dd HH:mm:ss.fff zzz} [{Level:u3}] {Message:lj}{NewLine}{Exception}"
-    )
-    .CreateLogger();
-/* Don't forget Log.CloseAndFlush(); at the end */
-
-try
-{
-    Log.Information("Starting TicketHub API up...");
-
-    var builder = WebApplication.CreateBuilder(args);
-
+/* ************************* Step 1: Configs and Services ************************* */
+/* ********* Preparation: Tools and Dependencies before launching the app ********* */
+var builder = WebApplication.CreateBuilder(args);
+#region Step 1: Configuration and Services
+    
     /* Get Connection string from appsetings.json*/
     var connectionString = builder.Configuration.GetConnectionString("DefaultConnection");
 
+    /* ******************************** Serilog Config ******************************** */
+    Log.Logger = new LoggerConfiguration()
+        .WriteTo.Console() /* Still having console logs */
+        .WriteTo.File(
+            path: "Logs/tickethub-log-.txt",
+            rollingInterval: RollingInterval.Day, /* new file everyday automaticaly */
+            outputTemplate: "{Timestamp:yyyy-MM-dd HH:mm:ss.fff zzz} [{Level:u3}] {Message:lj}{NewLine}{Exception}"
+        )
+        .CreateLogger();
+    /* Don't forget Log.CloseAndFlush(); at the end */
+    builder.Host.UseSerilog(); /* Replace the native logger with Serilog: Lets do structred logs */
+    /* ******************************************************************************** */
+
+    Log.Information("Starting TicketHub API up...");
+    
+
     /* Registry IDbContextFactory to manage concurrency safely */
-    builder.Services.AddDbContextFactory<TicketHubDbContext>(options =>
-        options.UseSqlServer(connectionString));
+    builder.Services.AddDbContextFactory<TicketHubDbContext>(options => options.UseSqlServer(connectionString));
+
 
     /* Configuration of Swagger/OpenAPI to interact with the API */
     builder.Services.AddEndpointsApiExplorer();
     builder.Services.AddSwaggerGen();
 
-    var app = builder.Build();
+#endregion
 
+/* ************************* Step 2: Execution and Logic ************************* */
+/* ********** Runing: App methods, Define Endpoints, and procesing data ********** */
+var app = builder.Build();
+#region Step 2: Execution and Logics
+    
     /* This if-condition is to be secure other people with the access to the app
     can't see the swager avoiding attacks */
     if (app.Environment.IsDevelopment())
@@ -39,7 +51,6 @@ try
         app.UseSwagger();
         app.UseSwaggerUI();
     }
-
 
 
     /* Test endpoint to validate the API is responding */
@@ -157,192 +168,106 @@ try
     });
     /* ******************************************************************************** */
 
-    /* auxiliar method process only one order in an atomic and secure maner managing concurrency */
-    static async Task ProcessSingleOrderAsync(IDbContextFactory<TicketHubDbContext> contextFactory, 
-    int customerId, int seatId, int quantityRequested)
+
+    /* Endpoint to simulate a massive burst of concurrent purchases */
+    app.MapPost("/orders/burst", (int n, IDbContextFactory<TicketHubDbContext> contextFactory, 
+        IHostApplicationLifetime lifetime, ILogger<Program> logger) =>
     {
-        /* each orden has its own exclusive short-term DbContext */
-        using var db = await contextFactory.CreateDbContextAsync();
-
-        /* Creating reservation header in Pendient state */
-        var booking = new Booking
+        logger.LogInformation("Started orders/burst database");
+        
+        /* Token to check the server status: if it is off, cancel the task */
+        var appStopping = lifetime.ApplicationStopping;
+        
+        /* Secondary thread: this background task */
+        _ = Task.Run(async () =>
         {
-            CustomerId = customerId,
-            Priority = BookingPriority.Normal,
-            Status = BookingStatus.Pending,
-            CreatedAt = DateTime.UtcNow
-        };
-        db.Bookings.Add(booking);
-        await db.SaveChangesAsync();
-
-        /* Adding detailed line requesting tickets */
-        var line = new BookingLine
-        {
-            BookingId = booking.Id,
-            ConcertSeatId = seatId,
-            Quantity = quantityRequested
-        };
-        db.BookingLines.Add(line);
-        await db.SaveChangesAsync();
-
-        int maxRetries = 1;
-        int retryCount = 0;
-        bool processed = false;
-
-        while (!processed && retryCount < maxRetries)
-        {
-            /* Start a explicit transaction to assure the atomicity (all or nothing) */
-            using var transaction = await db.Database.BeginTransactionAsync();
-
             try
             {
-                /* 1. take the real inventory directly from the DB */
-                var stock = await db.TicketStocks
-                    .FirstOrDefaultAsync(ts => ts.ConcertSeatId == seatId);
+                logger.LogInformation("Starting creation of {n} registers...", n);
+                
+                /* Define fresh context just for this thread */
+                using var db = await contextFactory.CreateDbContextAsync(appStopping);
+                
+                /* take seat with stock from DB */
+                var testSeat = await db.ConcertSeats
+                                        .Include(cs => cs.Stock)
+                                        .FirstOrDefaultAsync(appStopping);
 
-                if (stock == null)
+                if (testSeat == null)
                 {
-                    booking.Status = BookingStatus.Rejected;
-                    processed = true;
+                    logger.LogWarning("ConcertSeat not found into DB. Run /seed first.");
+                    return; 
                 }
-                /* 2. Verify if there is alowd tickets */
-                else if (stock.QuantityOnHand >= quantityRequested)
+
+                for (int i = 0; i < n; i++)
                 {
-                    /* Substract units from inventory */
-                    stock.QuantityOnHand -= quantityRequested;
-
-                    /* Update booking status */
-                    booking.Status = BookingStatus.Fulfilled;
-                    booking.CompletedAt = DateTime.UtcNow;
-
-                    /* let a registry in the audit */
-                    db.FulfillmentEvents.Add(new FulfillmentEvent
+                    
+                    /* Check if server is Open or shutdown: Make a clean exit */
+                    if (appStopping.IsCancellationRequested) { break; }
+                    
+                    if (testSeat.Stock == null || testSeat.Stock.QuantityOnHand <= 0)
                     {
-                        BookingId = booking.Id,
-                        Type = "Success",
-                        Message = $"Successfully secured {quantityRequested} tickets.",
-                        Timestamp = DateTime.UtcNow
-                    });
+                        logger.LogWarning("No more Stock available in burst loop. Stop operations.");
+                        break;
+                    }
+                    
+                    /* Guid.NewGuid() -> Generate an unique identifier of 36 chars */
+                    string uniqueId = Guid.NewGuid().ToString()[..8];
 
-                    /* Try save changes. if other task modified the same stock
-                    An exception ocurrs DbUpdateConcurrencyException by the RowVersion. */
-                    await db.SaveChangesAsync();
-                    await transaction.CommitAsync(); /* Confirm the DB changes */
-                    processed = true;
-
-                    Console.WriteLine($"[INFO] Order {booking.Id} fulfilled successfully.");
-                }
-                else
-                {
-                    /* if ther isn't suficient stock, order runs a Backorder cleanly */
-                    booking.Status = BookingStatus.Backordered;
-                    booking.CompletedAt = DateTime.UtcNow;
-
-                    db.FulfillmentEvents.Add(new FulfillmentEvent
+                    var fakeCustomer = new Customer
                     {
-                        BookingId = booking.Id,
-                        Type = "Backorder",
-                        Message = $"Insufficient stock. Requested {quantityRequested}, but only {stock.QuantityOnHand} left.",
-                        Timestamp = DateTime.UtcNow
-                    });
+                        Name = $"Burst Customer {uniqueId}",
+                        Email = $"burst_{uniqueId}@tickethub.com"
+                    };
 
-                    await db.SaveChangesAsync();
-                    await transaction.CommitAsync();
-                    processed = true;
+                    var newOrder = new Booking
+                    {
+                        Customer = fakeCustomer,
+                        Status = BookingStatus.Fulfilled,
+                        Priority = BookingPriority.Normal,
+                        CreatedAt = DateTime.UtcNow,
+                        CompletedAt = DateTime.UtcNow
+                    };
 
-                    Console.WriteLine($"[WARN] Order {booking.Id} sent to Backorder due to low stock.");
+                    var detail = new BookingLine
+                    {
+                        Booking = newOrder,
+                        ConcertSeat = testSeat,
+                        Quantity = 1
+                    };
+
+                    newOrder.Lines.Add(detail);
+                    db.Bookings.Add(newOrder);
+
+
+                    testSeat.Stock.QuantityOnHand -= 1; 
                 }
-            }
-            catch (DbUpdateConcurrencyException)
-            {
-                /* ¡A COLLISION OCCURRED! another order modified the stock at the same time. */
-                retryCount++;
-                await transaction.RollbackAsync(); /* unDo the actual try */
 
-                /* Forcing EFCore to reload the fresh data from the DB to the next try */
-                db.ChangeTracker.Clear();
+                /* Store the transaction at once */
+                await db.SaveChangesAsync(appStopping);
+                logger.LogInformation("Burst succesfully complete operation.");
 
-                Console.WriteLine($"[CONFLICT] Order {booking.Id} hit a conflict. Retrying ({retryCount}/{maxRetries})...");
-
-                if (retryCount >= maxRetries)
-                {
-                    /* If it exhausted the retries, sent safely it to Backorder to avoid breaking the thread. */
-                    booking.Status = BookingStatus.Backordered;
-                    booking.CompletedAt = DateTime.UtcNow;
-
-                    using var fallbackContext = await contextFactory.CreateDbContextAsync();
-                    fallbackContext.Bookings.Update(booking);
-                    await fallbackContext.SaveChangesAsync();
-
-                    processed = true;
-                }
             }
             catch (Exception ex)
             {
-                /* To handling generic errors so that a damaged thread doesn't bring down the API */
-                await transaction.RollbackAsync();
-                Console.WriteLine($"[ERROR] Order {booking.Id} failed unexpectedly: {ex.Message}");
-                processed = true;
-            }
-        }
-    }
-
-    /* Endpoint to simulate a massive burst of concurrent purchases */
-    app.MapPost("/orders/burst", (IDbContextFactory<TicketHubDbContext> contextFactory, int n,
-        ILogger<Program> logger) =>
-    {
-        logger.LogInformation("Started orders/burst database");
-        /* Triggers the process in a background thread 
-        (Task.Run) so that the endpoint responds immediately */
-        _ = Task.Run(async () =>
-        {
-            Console.WriteLine($"[START] Starting a massive burst of {n} simulated ticket purchases...");
-
-            var tasks = new Task[n];
-
-            for (int i = 0; i < n; i++)
-            {
-                /* Simulation of alternating clients (Ids 1 to 4 from seed) */
-                int customerId = (i % 4) + 1;
-
-                /* Each client try to buy 2 tickets into section VIP (Id = 1, has 50 base units) */
-                int seatId = 1;
-                int quantityToBuy = 2;
-
-                /* Save task in the array without wait yet */
-                tasks[i] = ProcessSingleOrderAsync(contextFactory, customerId, seatId, quantityToBuy);
+                logger.LogError(ex, "Burst orders failed");
             }
 
-            /* execute N tasks (simultaneous and concurrent) */
-            await TaskExtensions.CombineAllOrExceptions(tasks); /* Use WhenAll on a safe way */
-
-            Console.WriteLine($"[FINISHED] Burst of {n} orders processed completely.");
-        });
+        }, appStopping);
 
         /* Immediately respond to see that the API is not frozen */
         return Results.Ok(new { message = $"Burst request for {n} orders accepted. Processing concurrently in the background." });
     });
 
-    app.Run();
-}
-catch (Exception ex)
-{
-    Log.Fatal(ex, "The application HTTP host terminated unexpectedly.");
-}
-finally
-{
-    Log.CloseAndFlush(); /* Clean memory and assure writing of the file */
-}
+#endregion
 
-/* Quick extension to simulate WhenAll without losing individual exceptions */
-public static class TaskExtensions
-{
-    public static async Task CombineAllOrExceptions(Task[] tasks)
-    {
-        try
-        { await Task.WhenAll(tasks); }
-        catch
-        { /* Prevents an exception from abruptly halting the background process */ }
-    }
-}
+/* ************************* Step 3: Application Liftime ************************* */
+/* ********* Launching: Run and Stop point, prepare exit clear with logs ********* */
+app.Run();
+#region Step 3: Application Lifetime
+
+    Log.Information("TicketHub API is shutting down...");
+    Log.CloseAndFlush(); /* Clean memory and assure writing of the file */
+
+#endregion
 
