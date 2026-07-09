@@ -78,9 +78,9 @@ public class TicketHubDbContext : DbContext
         /* 3. Seed of Seats/Sections (ConcertSeats) */
         /* NOTE: Not assigned 'Stock' navigatiom property here, It'll be seeded separately */
         modelBuilder.Entity<ConcertSeat>().HasData(
-            new ConcertSeat { Id = 1, Sku = "VIP-ZONE", Name = "Sección VIP Frontal", Price = 250.00m },
-            new ConcertSeat { Id = 2, Sku = "GEN-FLOOR", Name = "Pista General de Pie", Price = 85.00m },
-            new ConcertSeat { Id = 3, Sku = "BALCONY-A", Name = "Balcón Preferente A", Price = 120.00m }
+            new ConcertSeat { Id = 1, Sku = "VIP-ZONE", Name = "VIP Front Stage", Price = 250.00m },
+            new ConcertSeat { Id = 2, Sku = "GEN-FLOOR", Name = "General Admission Standing", Price = 85.00m },
+            new ConcertSeat { Id = 3, Sku = "BALCONY-A", Name = "Balcony Preferent A", Price = 120.00m }
         );
 
         /* 4. Seed of inventory (TicketStocks) */
