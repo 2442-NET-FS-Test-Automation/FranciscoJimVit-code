@@ -1,0 +1,50 @@
+erDiagram
+    CUSTOMER ||--o{ BOOKING : "places"
+    CONCERT_SEAT ||--|| TICKET_STOCK : "has"
+    CONCERT_SEAT ||--o{ BOOKING_LINE : "is_ordered_in"
+    BOOKING ||--|{ BOOKING_LINE : "contains"
+    BOOKING ||--o{ FULFILLMENT_EVENT : "logs"
+
+    CUSTOMER {
+        int Id PK
+        string Name
+        string Email
+    }
+
+    CONCERT_SEAT {
+        int Id PK
+        string Sku UK
+        string Name
+        decimal Price
+    }
+
+    TICKET_STOCK {
+        int Id PK
+        int ConcertSeatId FK
+        int QuantityOnHand
+        byte[] RowVersion "Concurrency Token"
+    }
+
+    BOOKING {
+        int Id PK
+        int CustomerId FK
+        int Status "Pending, Fulfilled, Backordered, Rejected"
+        int Priority "Normal, Expedited"
+        DateTime CreatedAt
+        DateTime CompletedAt
+    }
+
+    BOOKING_LINE {
+        int Id PK
+        int BookingId FK
+        int ConcertSeatId FK
+        int Quantity
+    }
+
+    FULFILLMENT_EVENT {
+        int Id PK
+        int BookingId FK
+        string Type "Success, Backorder, Conflict"
+        string Message
+        DateTime Timestamp
+    }
