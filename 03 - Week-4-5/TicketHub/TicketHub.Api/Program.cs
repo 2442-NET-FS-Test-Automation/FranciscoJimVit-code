@@ -1,8 +1,10 @@
 using Microsoft.EntityFrameworkCore;
-using TicketHub.Data;
-
-using TicketHub.Data.Entities;
 using Serilog;
+
+using TicketHub.Data;
+using TicketHub.Data.Entities;
+using TicketHub.Data.Services;
+
 /* ******************************************************************************** */
 
 /* ************************* Step 1: Configs and Services ************************* */
@@ -31,6 +33,11 @@ var builder = WebApplication.CreateBuilder(args);
 
     /* Registry IDbContextFactory to manage concurrency safely */
     builder.Services.AddDbContextFactory<TicketHubDbContext>(options => options.UseSqlServer(connectionString));
+    
+    builder.Services.AddScoped<IFulfillmentService, FulfillmentService>();
+    
+    builder.Services.AddScoped<ISeeder, Seeder>();
+    builder.Services.AddScoped<IFulfillmentService, FulfillmentService>();
 
 
     /* Configuration of Swagger/OpenAPI to interact with the API */
@@ -170,93 +177,29 @@ var app = builder.Build();
 
 
     /* Endpoint to simulate a massive burst of concurrent purchases */
-    app.MapPost("/orders/burst", (int n, IDbContextFactory<TicketHubDbContext> contextFactory, 
-        IHostApplicationLifetime lifetime, ILogger<Program> logger) =>
+    app.MapPost("/orders/burst", (int n, bool expedited, ISeeder seeder,
+        IServiceScopeFactory scopes, IHostApplicationLifetime lifetime) =>
     {
-        logger.LogInformation("Started orders/burst database");
-        
-        /* Token to check the server status: if it is off, cancel the task */
+        var ids = seeder.SeedOrders(n, expedited);
         var appStopping = lifetime.ApplicationStopping;
-        
-        /* Secondary thread: this background task */
+
         _ = Task.Run(async () =>
         {
             try
             {
-                logger.LogInformation("Starting creation of {n} registers...", n);
+                using var scope = scopes.CreateScope();
+                var service = scope.ServiceProvider.GetRequiredService<IFulfillmentService>();
                 
-                /* Define fresh context just for this thread */
-                using var db = await contextFactory.CreateDbContextAsync(appStopping);
-                
-                /* take seat with stock from DB */
-                var testSeat = await db.ConcertSeats
-                                        .Include(cs => cs.Stock)
-                                        .FirstOrDefaultAsync(appStopping);
-
-                if (testSeat == null)
-                {
-                    logger.LogWarning("ConcertSeat not found into DB. Run /seed first.");
-                    return; 
-                }
-
-                for (int i = 0; i < n; i++)
-                {
-                    
-                    /* Check if server is Open or shutdown: Make a clean exit */
-                    if (appStopping.IsCancellationRequested) { break; }
-                    
-                    if (testSeat.Stock == null || testSeat.Stock.QuantityOnHand <= 0)
-                    {
-                        logger.LogWarning("No more Stock available in burst loop. Stop operations.");
-                        break;
-                    }
-                    
-                    /* Guid.NewGuid() -> Generate an unique identifier of 36 chars */
-                    string uniqueId = Guid.NewGuid().ToString()[..8];
-
-                    var fakeCustomer = new Customer
-                    {
-                        Name = $"Burst Customer {uniqueId}",
-                        Email = $"burst_{uniqueId}@tickethub.com"
-                    };
-
-                    var newOrder = new Booking
-                    {
-                        Customer = fakeCustomer,
-                        Status = BookingStatus.Fulfilled,
-                        Priority = BookingPriority.Normal,
-                        CreatedAt = DateTime.UtcNow,
-                        CompletedAt = DateTime.UtcNow
-                    };
-
-                    var detail = new BookingLine
-                    {
-                        Booking = newOrder,
-                        ConcertSeat = testSeat,
-                        Quantity = 1
-                    };
-
-                    newOrder.Lines.Add(detail);
-                    db.Bookings.Add(newOrder);
-
-
-                    testSeat.Stock.QuantityOnHand -= 1; 
-                }
-
-                /* Store the transaction at once */
-                await db.SaveChangesAsync(appStopping);
-                logger.LogInformation("Burst succesfully complete operation.");
-
-            }
+                /* Parallel procesing IDs into Fulfillment Service */
+                await service.FulfillBurstAsync(ids, appStopping);
+            } 
             catch (Exception ex)
             {
-                logger.LogError(ex, "Burst orders failed");
+                Log.Error(ex, "Burst fulfillment failed");
             }
-
         }, appStopping);
 
-        /* Immediately respond to see that the API is not frozen */
-        return Results.Ok(new { message = $"Burst request for {n} orders accepted. Processing concurrently in the background." });
+        return Results.Accepted(value: new { message = $"Burst request for {n} orders accepted. Processing concurrently in the background." });
     });
 
 #endregion
