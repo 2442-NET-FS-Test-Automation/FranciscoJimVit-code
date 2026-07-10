@@ -1,5 +1,6 @@
 using Microsoft.EntityFrameworkCore;
 using Serilog;
+using System.Diagnostics;
 
 using TicketHub.Data;
 using TicketHub.Data.Entities;
@@ -17,6 +18,7 @@ var builder = WebApplication.CreateBuilder(args);
 
     /* ******************************** Serilog Config ******************************** */
     Log.Logger = new LoggerConfiguration()
+        .MinimumLevel.Override("Microsoft.EntityFrameworkCore.Database.Command", Serilog.Events.LogEventLevel.Warning)
         .WriteTo.Console() /* Still having console logs */
         .WriteTo.File(
             path: "Logs/tickethub-log-.txt",
@@ -200,6 +202,34 @@ var app = builder.Build();
         }, appStopping);
 
         return Results.Accepted(value: new { message = $"Burst request for {n} orders accepted. Processing concurrently in the background." });
+    });
+
+    app.MapPost("/benchmark", async (int n, IFulfillmentService fs, ISeeder seeder, CancellationToken ct) =>
+    {
+        // Lets see how sequential vs concurrent/arallel runs compare - with mixed orders
+        var ids1 = seeder.SeedOrders(n, expedited: false);
+
+        // First, sequential
+        var sw1 = Stopwatch.StartNew(); // start our stopwatch
+
+        foreach ( var id in ids1)
+            await fs.FulfillOneAsync(id, ct);
+
+        sw1.Stop();
+
+        // Next concurrent
+        var ids2 = seeder.SeedOrders(n, expedited: false);
+
+        var sw2 = Stopwatch.StartNew(); // start second stopwatch
+        await fs.FulfillBurstAsync(ids2, ct);
+        sw2.Stop();
+
+        return new
+        {
+            sequentialMs = sw1.ElapsedMilliseconds,
+            concurrentMs = sw2.ElapsedMilliseconds
+        };
+
     });
 
 #endregion
