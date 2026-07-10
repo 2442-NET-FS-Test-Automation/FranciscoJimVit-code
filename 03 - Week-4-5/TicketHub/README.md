@@ -10,7 +10,7 @@
 
 - **EF Core Model Configuration:** Defined via Data Annotations in entities like `ConcertSeat.cs` (`[Required]`, `[StringLength]`) and `TicketStock.cs` (`[Timestamp]`).
 - **DbContext Thread Isolation:** Solved using `IDbContextFactory<TicketHubDbContext>` in `FulfillmentService.cs` to instantiate a fresh, independent context per asynchronous operation block.
-- **Minimal API Endpoint Routing:** Implemented in `Program.cs` via `MapPost("/seed")`, `MapGet("/inventory")`, `MapPost("/orders/burst")`, and the `/reports/*` path suite.
+- **Minimal API Endpoint Routing:** Implemented in `Program.cs` via `MapPost("/seed")`, `MapGet("/inventory")`, `MapPost("/orders/burst")`, `MapPost("/benchmark")`, and the `/reports/*` path suite.
 - **Background Processing Offloading:** Achieved via `Task.Run` inside the `POST /orders/burst` handler in `Program.cs`.
 - **Optimistic Concurrency Retry Loop:** Fully implemented inside `FulfillmentService.FulfillOneAsync` using a `try-catch` block for `DbUpdateConcurrencyException` and an exponential random *backoff* via `Task.Delay`.
 - **Structured Logging:** Powered by **Serilog** templates (`Log.Warning("... {BookingId} ...", bookingId)`) throughout `Program.cs` and `FulfillmentService.cs`.
@@ -51,13 +51,14 @@ Each single-line booking execution block runs within an independent database tra
 
 ## 7. Benchmark Numbers & Concurrency Note
 
-- **Benchmark Statistics:** *Not applicable / Pending implementation.* (The `POST /benchmark` endpoint comparing parallel and sequential loops is currently absent).
-- **Parallelism vs. Concurrency Note:** *Concurrency* is about execution structure—the ability to manage and orchestrate multiple tasks overlapping in time (such as handling incoming requests while a background thread works). *Parallelism* is about execution hardware—physically running multiple computations at the exact same physical instant utilizing multiple CPU cores.
+- **Endpoint Implemented:** `POST /benchmark`
+- **Execution Strategy:** Evaluates performance by seeding independent, equivalent order waves of size `N`, running the first batch through a sequential `foreach` loop and the second batch utilizing multi-threaded background task processing (`Parallel.ForEachAsync` inside `FulfillBurstAsync`).
+- **Parallelism vs. Concurrency Note:** *Concurrency* is about execution structure—the ability to manage and orchestrate multiple tasks overlapping in time (such as handling incoming requests while a background thread works). *Parallelism* is about execution hardware—physically running multiple computations at the exact same physical instant utilizing multiple CPU cores simultaneously.
 
 ---
 
 ## 8. HTTP Status Codes Selection
 
 The web surface exposes the following explicit status codes based on the Engineering Definition of Done:
-- **`200 OK`:** Returned by `GET /inventory` and `GET /reports/*` because the data requested exists and is read successfully.
+- **`200 OK`:** Returned by `GET /inventory`, `GET /reports/*`, and `POST /benchmark` because the requested analytical computation or data state exists and successfully returns its payload.
 - **`202 Accepted`:** Emitted immediately by `POST /orders/burst`. This indicates that the incoming payload is valid, and the processing workload has been safely offloaded onto a background worker thread.

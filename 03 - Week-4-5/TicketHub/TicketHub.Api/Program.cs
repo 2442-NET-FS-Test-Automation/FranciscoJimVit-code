@@ -204,8 +204,13 @@ var app = builder.Build();
         return Results.Accepted(value: new { message = $"Burst request for {n} orders accepted. Processing concurrently in the background." });
     });
 
-    app.MapPost("/benchmark", async (int n, IFulfillmentService fs, ISeeder seeder, CancellationToken ct) =>
+    app.MapPost("/benchmark", async (int n, IFulfillmentService fs, ISeeder seeder, CancellationToken ct, 
+        IDbContextFactory<TicketHubDbContext> contextFactory) =>
     {
+        using var db = await contextFactory.CreateDbContextAsync();
+        await db.Database.EnsureDeletedAsync();
+        await db.Database.EnsureCreatedAsync();
+
         // Lets see how sequential vs concurrent/arallel runs compare - with mixed orders
         var ids1 = seeder.SeedOrders(n, expedited: false);
 
@@ -218,6 +223,9 @@ var app = builder.Build();
         sw1.Stop();
 
         // Next concurrent
+        await db.Database.EnsureDeletedAsync();
+        await db.Database.EnsureCreatedAsync();
+
         var ids2 = seeder.SeedOrders(n, expedited: false);
 
         var sw2 = Stopwatch.StartNew(); // start second stopwatch
