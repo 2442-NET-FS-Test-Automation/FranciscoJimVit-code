@@ -1,17 +1,20 @@
+using System.Text;
 using Library.ControllerApi.Filters;
 using Library.ControllerApi.Mapping;
 using Library.ControllerApi.Middleware;
 using Library.ControllerApi.Services;
 using Library.Data;
+using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.IdentityModel.Tokens;
 using Serilog;
 
 var builder = WebApplication.CreateBuilder(args);
 
 // Add services to the container.
 // Adding connection string 
-var conn_string = "Server=localhost,1433;Database=LibraryMinimalDb;User Id=sa;Password=adminPass1!;TrustServerCertificate=true";
-
+var conn_string = builder.Configuration.GetConnectionString("Library") ?? 
+    "Server=localhost,1433;Database=LibraryMinimalDb;User Id=sa;Password=adminPass1!;TrustServerCertificate=true";
 
 Log.Logger = new LoggerConfiguration()
     .WriteTo.Console() // Write to console, and write to a file - starting a new file each day.
@@ -19,6 +22,44 @@ Log.Logger = new LoggerConfiguration()
     .CreateLogger();
 
 builder.Host.UseSerilog(); // Tell the builder to use Serilog for logging
+
+// Adding CORS 
+const string SpaCorsPolicy = "spa"; // string name for our policy 
+
+// Configuring our CORS policy
+builder.Services.AddCors(o => o.AddPolicy(SpaCorsPolicy, p => p
+    .WithOrigins("http://localhost:3000")
+    .AllowAnyHeader()
+    .AllowAnyMethod()
+));
+
+
+// VALIDATION side of JWT. Issuance lives in TokenService
+var jwtKey = builder.Configuration["Jwt:Key"]; //from appsettings.Development.json
+
+// Hardcoding the issuer and audience - these have to match the ones we set on the token
+const string jwtIssuer = "library-fulfillment";
+const string jwtAudience = "library-fulfillment-clients";
+
+builder.Services.AddAuthentication(JwtBearerDefaults.AuthenticationScheme)
+    .AddJwtBearer(o => o.TokenValidationParameters = new TokenValidationParameters
+    {
+       ValidateIssuer = true, ValidIssuer = jwtIssuer,
+       ValidateAudience = true, ValidAudience = jwtAudience,
+       ValidateIssuerSigningKey = true, IssuerSigningKey = new SymmetricSecurityKey(Encoding.UTF8.GetBytes(jwtKey)),
+       ValidateLifetime = true
+    });
+
+builder.Services.AddAuthorization(); // goes after authentication
+
+// Token Issuance is a plain injectable service. Its stateless so we can use a singleton
+builder.Services.AddSingleton<ITokenService, TokenService>();
+
+// Adding our HttpClient
+builder.Services.AddHttpClient<ISupplierClient, SupplierClient>(c => 
+    c.BaseAddress = new Uri("https://dummyjson.com/") // all calls append to this URL
+);
+
 
 builder.Services.AddDbContextFactory<LibraryDbContext>(o => o.UseSqlServer(conn_string));
 
@@ -37,6 +78,11 @@ builder.Services.AddOpenApi();
 
 // Adding swagger back
 builder.Services.AddSwaggerGen();
+
+// Adding caching
+builder.Services.AddMemoryCache(); // adding cache-ing to our server
+builder.Services.AddResponseCaching(); // adding response cache-ing - asking the front end to save request results 
+
 
 var app = builder.Build();
 
@@ -79,12 +125,20 @@ app.Use(async (ctx, next) =>
     await next(ctx);
 });
 
+app.UseResponseCaching(); // using the response cache middleware
+
+app.UseCors(SpaCorsPolicy); //using our policy, with the CORS middleware
+
+//Must be in this order for Authn/Authz
+app.UseAuthentication(); // read and validate the tokens -> set User
+app.UseAuthorization(); // enforces the [Authorize] / RequireAuthorization() decorators on endpoints 
+
 app.UseSerilogRequestLogging();
 
 app.UseHttpsRedirection();
 
-app.UseAuthorization();
-
 app.MapControllers();
 
 app.Run();
+
+Log.CloseAndFlush(); // Close and flush the logs (serilog)
