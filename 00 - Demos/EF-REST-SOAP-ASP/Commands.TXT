@@ -3,3 +3,12 @@ Commands Entity Framework
 dotnet ef migrations add OrdersCustomers --project Library.Data --startup-project Library.Api
 dotnet ef migrations add AnnotatedCustomer --project Library.Data --startup-project Library.Api
 dotnet ef database update --project Library.Data --startup-project Library.Api
+
+// TODO
+dotnet ef migrations add Users --project Library.Data/ --startup-project Library.Api
+dotnet ef database update --project Library.Data --startup-project Library.Api
+
+
+
+NOTE: DON'T DO THIS: To dealte the last migration
+dotnet ef migrations remove --project Library.Data --startup-project Library.Api
