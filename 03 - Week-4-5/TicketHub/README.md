@@ -1,4 +1,4 @@
-# TicketHub — README Writeup
+# TicketHub Readme — By Francsico Jiménez Vital
 
 ## 1. Domain & Order Scope
 - **Domain:** Event Ticketing (`ConcertSeat`, `TicketStock` & `Booking`).
@@ -50,6 +50,10 @@ Each single-line booking execution block runs within an independent database tra
 ---
 
 ## 7. Benchmark Numbers & Concurrency Note
+- "sequentialMs": 947
+- "concurrentMs": 485
+
+        "speedFactor": 1.9526x
 
 - **Endpoint Implemented:** `POST /benchmark`
 - **Execution Strategy:** Evaluates performance by seeding independent, equivalent order waves of size `N`, running the first batch through a sequential `foreach` loop and the second batch utilizing multi-threaded background task processing (`Parallel.ForEachAsync` inside `FulfillBurstAsync`).

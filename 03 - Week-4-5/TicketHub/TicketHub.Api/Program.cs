@@ -188,7 +188,8 @@ var app = builder.Build();
         return new
         {
             sequentialMs = sw1.ElapsedMilliseconds,
-            concurrentMs = sw2.ElapsedMilliseconds
+            concurrentMs = sw2.ElapsedMilliseconds,
+            speedFactor =  Math.Round((double) sw1.ElapsedMilliseconds/sw2.ElapsedMilliseconds, 4)
         };
 
     });
