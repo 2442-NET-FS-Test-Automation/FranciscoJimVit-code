@@ -62,6 +62,7 @@ var app = builder.Build();
     }
 
 
+
     /* Test endpoint to validate the API is responding */
     app.MapGet("/ping", () => Results.Ok(new { message = "TicketHub API is live!" }));
 
@@ -102,6 +103,100 @@ var app = builder.Build();
 
         return Results.Ok(inventory);
     });
+
+    /* Endpoint to simulate a massive burst of concurrent purchases */
+    app.MapPost("/orders/burst", (int n, bool expedited, ISeeder seeder,
+        IServiceScopeFactory scopes, IHostApplicationLifetime lifetime) =>
+    {
+        var ids = seeder.SeedOrders(1, expedited);
+        var appStopping = lifetime.ApplicationStopping;
+
+        _ = Task.Run(async () =>
+        {
+            try
+            {
+                using var scope = scopes.CreateScope();
+                var service = scope.ServiceProvider.GetRequiredService<IFulfillmentService>();
+                
+                /* Parallel procesing IDs into Fulfillment Service */
+                await service.FulfillBurstAsync(ids, appStopping);
+            } 
+            catch (Exception ex)
+            {
+                Log.Error(ex, "Burst fulfillment failed");
+            }
+        }, appStopping);
+
+        return Results.Accepted(value: new { message = $"Burst request for {n} orders accepted. Processing concurrently in the background." });
+    });
+
+    /* Endpoint to simulate a burst of one purchase */
+    app.MapPost("/orders/burst-one", (bool expedited, ISeeder seeder,
+        IServiceScopeFactory scopes, IHostApplicationLifetime lifetime) =>
+    {
+        var ids = seeder.SeedOrders(1, expedited);
+        var appStopping = lifetime.ApplicationStopping;
+
+        _ = Task.Run(async () =>
+        {
+            try
+            {
+                using var scope = scopes.CreateScope();
+                var service = scope.ServiceProvider.GetRequiredService<IFulfillmentService>();
+                
+                /* Parallel procesing IDs into Fulfillment Service */
+                await service.FulfillBurstAsync(ids, appStopping);
+            } 
+            catch (Exception ex)
+            {
+                Log.Error(ex, "Burst one fulfillment failed");
+            }
+        }, appStopping);
+
+        return Results.Accepted(value: new { message = $"Burst one request accepted." });
+    });
+
+    /* Endpoint to compare execution times sequential vs concurrent */
+    app.MapPost("/benchmark", async (int n, IFulfillmentService fs, ISeeder seeder, CancellationToken ct, 
+        IDbContextFactory<TicketHubDbContext> contextFactory) =>
+    {
+        using var db = await contextFactory.CreateDbContextAsync();
+        await db.Database.EnsureDeletedAsync();
+        await db.Database.EnsureCreatedAsync();
+
+        // Lets see how sequential vs concurrent/arallel runs compare - with mixed orders
+        var ids1 = seeder.SeedOrders(n, expedited: false);
+
+        // First, sequential
+        var sw1 = Stopwatch.StartNew(); // start our stopwatch
+
+        foreach ( var id in ids1)
+            await fs.FulfillOneAsync(id, ct);
+
+        sw1.Stop();
+
+        // Next concurrent
+        await db.Database.EnsureDeletedAsync();
+        await db.Database.EnsureCreatedAsync();
+
+        var ids2 = seeder.SeedOrders(n, expedited: false);
+
+        var sw2 = Stopwatch.StartNew(); // start second stopwatch
+        await fs.FulfillBurstAsync(ids2, ct);
+        sw2.Stop();
+
+        return new
+        {
+            sequentialMs = sw1.ElapsedMilliseconds,
+            concurrentMs = sw2.ElapsedMilliseconds,
+            speedFactor =  Math.Round((double) sw1.ElapsedMilliseconds/sw2.ElapsedMilliseconds, 4)
+        };
+
+    });
+
+
+
+
 
     /* ******************************************************************************** */
     /* 1. Report: Top best-sell sections (total ticket volum) */
@@ -177,68 +272,53 @@ var app = builder.Build();
     });
     /* ******************************************************************************** */
 
-
-    /* Endpoint to simulate a massive burst of concurrent purchases */
-    app.MapPost("/orders/burst", (int n, bool expedited, ISeeder seeder,
-        IServiceScopeFactory scopes, IHostApplicationLifetime lifetime) =>
+    /* Report a customer filtered by provided Id  */
+    app.MapGet("/reports/customer-by-id", async (IDbContextFactory<TicketHubDbContext> contextFactory, 
+        ILogger<Program> Logger, int id) =>
     {
-        var ids = seeder.SeedOrders(n, expedited);
-        var appStopping = lifetime.ApplicationStopping;
-
-        _ = Task.Run(async () =>
-        {
-            try
-            {
-                using var scope = scopes.CreateScope();
-                var service = scope.ServiceProvider.GetRequiredService<IFulfillmentService>();
-                
-                /* Parallel procesing IDs into Fulfillment Service */
-                await service.FulfillBurstAsync(ids, appStopping);
-            } 
-            catch (Exception ex)
-            {
-                Log.Error(ex, "Burst fulfillment failed");
-            }
-        }, appStopping);
-
-        return Results.Accepted(value: new { message = $"Burst request for {n} orders accepted. Processing concurrently in the background." });
-    });
-
-    app.MapPost("/benchmark", async (int n, IFulfillmentService fs, ISeeder seeder, CancellationToken ct, 
-        IDbContextFactory<TicketHubDbContext> contextFactory) =>
-    {
+        Logger.LogInformation("Started reports/curstomer-by-id get from database");
         using var db = await contextFactory.CreateDbContextAsync();
-        await db.Database.EnsureDeletedAsync();
-        await db.Database.EnsureCreatedAsync();
 
-        // Lets see how sequential vs concurrent/arallel runs compare - with mixed orders
-        var ids1 = seeder.SeedOrders(n, expedited: false);
+        var customer = await db.Customers
+            .Where(c => c.Id == id)
+            .Select(c => new
+            {
+                c.Id,
+                c.Name,
+                c.Email
+            })
+            .ToListAsync();
 
-        // First, sequential
-        var sw1 = Stopwatch.StartNew(); // start our stopwatch
-
-        foreach ( var id in ids1)
-            await fs.FulfillOneAsync(id, ct);
-
-        sw1.Stop();
-
-        // Next concurrent
-        await db.Database.EnsureDeletedAsync();
-        await db.Database.EnsureCreatedAsync();
-
-        var ids2 = seeder.SeedOrders(n, expedited: false);
-
-        var sw2 = Stopwatch.StartNew(); // start second stopwatch
-        await fs.FulfillBurstAsync(ids2, ct);
-        sw2.Stop();
-
-        return new
-        {
-            sequentialMs = sw1.ElapsedMilliseconds,
-            concurrentMs = sw2.ElapsedMilliseconds
-        };
-
+            return Results.Ok(customer);
     });
+
+    /* Report Expedited Orders */
+    app.MapGet("/reports/bookings-expedited", async (bool expedited, IDbContextFactory<TicketHubDbContext> contextFactory,
+        ILogger<Program> Logger) =>
+    {
+        Logger.LogInformation("Started reports/bookings-expedited get from database");
+        using var db = await contextFactory.CreateDbContextAsync();
+
+        var priority = expedited? BookingPriority.Expedited : BookingPriority.Normal;
+        
+        var bookings = await db.Bookings
+            .Where(b => b.Priority == priority)
+            .Select(b => new
+            {
+                b.Id,
+                b.CustomerId,
+                b.Customer,
+                b.Lines,
+                b.Priority,
+                b.Status,
+                b.CreatedAt,
+                b.CompletedAt
+            })
+            .ToListAsync();
+
+        return Results.Ok(bookings);
+    });
+
 
 #endregion
 
