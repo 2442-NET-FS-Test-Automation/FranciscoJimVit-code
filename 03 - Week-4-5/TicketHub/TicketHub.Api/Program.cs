@@ -108,7 +108,7 @@ var app = builder.Build();
     app.MapPost("/orders/burst", (int n, bool expedited, ISeeder seeder,
         IServiceScopeFactory scopes, IHostApplicationLifetime lifetime) =>
     {
-        var ids = seeder.SeedOrders(1, expedited);
+        var ids = seeder.SeedOrders(n, expedited);
         var appStopping = lifetime.ApplicationStopping;
 
         _ = Task.Run(async () =>
