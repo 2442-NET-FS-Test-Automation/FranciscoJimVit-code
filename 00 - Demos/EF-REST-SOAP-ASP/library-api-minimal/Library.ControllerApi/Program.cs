@@ -5,7 +5,7 @@ var builder = WebApplication.CreateBuilder(args);
 
 // Add services to the container.
 // Adding connection string 
-var conn_string = "Server=localhost,1433;Database=LibraryMinimalDb;User Id=sa;Password=adminPass1!;TrustServerCertificate=true";
+var conn_string = "Server=localhost,1433;Database=LibraryMinimalDb;User Id=sa;Password=libraryPass1!;TrustServerCertificate=true";
 
 builder.Services.AddDbContextFactory<LibraryDbContext>(o => o.UseSqlServer(conn_string));
 

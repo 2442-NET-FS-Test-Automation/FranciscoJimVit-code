@@ -18,7 +18,7 @@ dotnet add TicketHub.Api package Swashbuckle.AspNetCore
 ## - - - - - - - - - - - - - 
 # To create a service in docker Only for new DB services: 
 ## I'm not use this command because I reuse the Library server
-docker run -d --name librarysqlserver -p 1433:1433 \ -e ACCEPT_EULA=Y -e MSSQL_SA_PASSWORD='adminPass1!' \ mcr.microsoft.com/mssql/server:2022-latest
+docker run -d --name librarysqlserver -p 1433:1433 \ -e ACCEPT_EULA=Y -e MSSQL_SA_PASSWORD='libraryPass1!' \ mcr.microsoft.com/mssql/server:2022-latest
 
 # To start Docker - Directly on Docker Desktop
 docker start librarysqlserver

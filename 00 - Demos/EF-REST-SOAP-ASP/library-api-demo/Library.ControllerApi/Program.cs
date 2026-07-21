@@ -16,7 +16,7 @@ var builder = WebApplication.CreateBuilder(args);
 // Add services to the container.
 // Adding connection string 
 var conn_string = builder.Configuration.GetConnectionString("Library") ?? 
-    "Server=localhost,1433;Database=LibraryMinimalDb;User Id=sa;Password=adminPass1!;TrustServerCertificate=true";
+    "Server=localhost,1433;Database=LibraryMinimalDb;User Id=sa;Password=LibraryPass1!;TrustServerCertificate=true";
 
 Log.Logger = new LoggerConfiguration()
     .WriteTo.Console() // Write to console, and write to a file - starting a new file each day.
@@ -30,7 +30,7 @@ const string SpaCorsPolicy = "spa"; // string name for our policy
 
 // Configuring our CORS policy
 builder.Services.AddCors(o => o.AddPolicy(SpaCorsPolicy, p => p
-    .WithOrigins("http://127.0.0.1:5500")
+    .WithOrigins("http://127.0.0.1:5500", "http://localhost:5173")
     .AllowAnyHeader()
     .AllowAnyMethod()
 ));
