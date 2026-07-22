@@ -27,8 +27,6 @@ export type Sku = string; // aliasing strings as Skus
 // can also use it like an enum
 export type FetchState = "idle" | "loading" | "loaded" | "failed"
 
-let accountId: string | number; // now this variable can hold either type, a Union
-
 // Enums - lets use a numeric enum to list out our error codes 
 // that we can expect to get back from API
 
