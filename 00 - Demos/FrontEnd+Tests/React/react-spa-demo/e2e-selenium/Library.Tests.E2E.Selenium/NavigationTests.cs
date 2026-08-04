@@ -4,14 +4,16 @@ using OpenQA.Selenium.Chrome;
 
 namespace Library.Tests.E2E.Selenium;
 
+// Navigation methods - we've seen GoToUrl() for navigating to a specific page
+// We have others that lets us navigate like a user would in browser
+// GoToUrl(), Back(), Forward(), Refresh() refreshes the page - can be important for SPAs
 public class NavigationTests: IDisposable
 {
     private readonly ChromeDriver _driver;
 
     public NavigationTests()
     {
-
-        // Option classes: per browser launch config.
+         // Option classes: per browser launch config.
         // Headless makes it so chrome doesn't pop up
         // we can even tell it things like what window size we want it to use
         var options = new ChromeOptions();
@@ -26,67 +28,46 @@ public class NavigationTests: IDisposable
         // failing. Proper explicit waits will be demoed later on.
         _driver.Manage().Timeouts().ImplicitWait = TimeSpan.FromSeconds(2);
 
+        // Every test in this file will start at the catalog
         _driver.Navigate().GoToUrl("http://localhost:5173/");
-
     }
 
     public void Dispose()
     {
-        _driver.Quit(); // kills the browser AND the chromedriver process
-    }
-
-    [Fact]
-    public void ByTagName_FindsTheHeader()
-    {
-        _driver.FindElement(By.TagName("h1")).Text.Should().Be("Library");
-    }
-
-    [Fact]
-    public void ByClassName_FindsEveryCard()
-    {
-        var cards = _driver.FindElements(By.ClassName("card"));
-
-        cards.Should().NotBeEmpty();
-    }
-
-    [Fact]
-    public void ByCssSelector_ComposesStructureAndClass()
-    {
-        var firstTitleLink = _driver.FindElement(By.CssSelector("article.card h3 a"));
-
-        firstTitleLink.Text.Should().NotBeNullOrEmpty();
-    }
-
-    [Fact]
-    public void ByLinkText_FindsAnchorsByWhatUserReads()
-    {
-        _driver.FindElement(By.LinkText("About")).TagName.Should().Be("a");
-        _driver.FindElement(By.PartialLinkText("Cata")).Text.Should().Be("Catalog");
+        _driver.Quit();
     }
 
     [Fact]
     public void DirectUrl_LoadsADeepRoute()
     {
+        // Lets go to a BookDetail page for one of our books
         _driver.Navigate().GoToUrl("http://localhost:5173/inventory/BK-001");
+
         _driver.FindElement(By.TagName("h2")).Text.Should().Be("Clean Code");
     }
 
     [Fact]
     public void BackForwardRefresh_WalkTheHistory()
     {
-        _driver.Navigate().GoToUrl("http://localhost:5173/");
-        _driver.Navigate().GoToUrl("http://localhost:5173/about");;
+        _driver.Navigate().GoToUrl("http://localhost:5173/"); // go to catalog
+        _driver.Navigate().GoToUrl("http://localhost:5173/about"); // go to about page
 
         _driver.FindElement(By.TagName("h2")).Text.Should().Be("About");
 
-        _driver.Navigate().Back();
+        // Back and Forward navigation use the browser's real history stack
+        // same as user pressing back and forward buttons on their browser
+        _driver.Navigate().Back(); // back to catalog
         _driver.FindElement(By.TagName("h2")).Text.Should().Be("Catalog");
 
-        _driver.Navigate().Forward();
+        _driver.Navigate().Forward(); // forward to about
         _driver.FindElement(By.TagName("h2")).Text.Should().Be("About");
 
-        _driver.Navigate().Refresh();
+
+        // Refresh reloads the document; the url remains the same because
+        // that's our SPA behavior
+        _driver.Navigate().Refresh(); // refresh the about page
         _driver.FindElement(By.TagName("h2")).Text.Should().Be("About");
         _driver.Url.Should().EndWith("/about");
+
     }
 }
