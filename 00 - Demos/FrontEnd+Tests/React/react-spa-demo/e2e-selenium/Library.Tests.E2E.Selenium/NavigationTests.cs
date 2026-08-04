@@ -4,13 +4,11 @@ using OpenQA.Selenium.Chrome;
 
 namespace Library.Tests.E2E.Selenium;
 
-public class LocatorTests : IDisposable
+public class NavigationTests: IDisposable
 {
-    // Our first selenium test. 
-    // We need an instance of our driver - matched to our browser
     private readonly ChromeDriver _driver;
 
-    public LocatorTests()
+    public NavigationTests()
     {
 
         // Option classes: per browser launch config.
@@ -64,5 +62,31 @@ public class LocatorTests : IDisposable
     {
         _driver.FindElement(By.LinkText("About")).TagName.Should().Be("a");
         _driver.FindElement(By.PartialLinkText("Cata")).Text.Should().Be("Catalog");
+    }
+
+    [Fact]
+    public void DirectUrl_LoadsADeepRoute()
+    {
+        _driver.Navigate().GoToUrl("http://localhost:5173/inventory/BK-001");
+        _driver.FindElement(By.TagName("h2")).Text.Should().Be("Clean Code");
+    }
+
+    [Fact]
+    public void BackForwardRefresh_WalkTheHistory()
+    {
+        _driver.Navigate().GoToUrl("http://localhost:5173/");
+        _driver.Navigate().GoToUrl("http://localhost:5173/about");;
+
+        _driver.FindElement(By.TagName("h2")).Text.Should().Be("About");
+
+        _driver.Navigate().Back();
+        _driver.FindElement(By.TagName("h2")).Text.Should().Be("Catalog");
+
+        _driver.Navigate().Forward();
+        _driver.FindElement(By.TagName("h2")).Text.Should().Be("About");
+
+        _driver.Navigate().Refresh();
+        _driver.FindElement(By.TagName("h2")).Text.Should().Be("About");
+        _driver.Url.Should().EndWith("/about");
     }
 }

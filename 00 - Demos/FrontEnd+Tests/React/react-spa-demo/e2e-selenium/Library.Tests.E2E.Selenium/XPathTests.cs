@@ -4,13 +4,11 @@ using OpenQA.Selenium.Chrome;
 
 namespace Library.Tests.E2E.Selenium;
 
-public class LocatorTests : IDisposable
+public class XPathTests: IDisposable
 {
-    // Our first selenium test. 
-    // We need an instance of our driver - matched to our browser
     private readonly ChromeDriver _driver;
 
-    public LocatorTests()
+    public XPathTests()
     {
 
         // Option classes: per browser launch config.
@@ -38,31 +36,46 @@ public class LocatorTests : IDisposable
     }
 
     [Fact]
-    public void ByTagName_FindsTheHeader()
+    public void RelativeXPath_MatchesByAttribute()
     {
-        _driver.FindElement(By.TagName("h1")).Text.Should().Be("Library");
-    }
-
-    [Fact]
-    public void ByClassName_FindsEveryCard()
-    {
-        var cards = _driver.FindElements(By.ClassName("card"));
-
+        var cards = _driver.FindElements(By.XPath("//article[@class='card']"));
         cards.Should().NotBeEmpty();
     }
 
     [Fact]
-    public void ByCssSelector_ComposesStructureAndClass()
+    public void XPathFunctions_MatchOnTExt()
     {
-        var firstTitleLink = _driver.FindElement(By.CssSelector("article.card h3 a"));
+        var cleanCode = _driver.FindElement(By.XPath("//h3/a[contains(text(), 'Clean')]"));
+        cleanCode.Text.Should().Be("Clean Code");
 
-        firstTitleLink.Text.Should().NotBeNullOrEmpty();
+        var skus = _driver.FindElements(By.XPath("//dd[starts-with(text(), 'BK-')]"));
+        skus.Should().HaveCount(3);
     }
 
     [Fact]
-    public void ByLinkText_FindsAnchorsByWhatUserReads()
+    public void XPathAxes_WalkUpAndSideways()
     {
-        _driver.FindElement(By.LinkText("About")).TagName.Should().Be("a");
-        _driver.FindElement(By.PartialLinkText("Cata")).Text.Should().Be("Catalog");
+        var cardOfCleanCode = _driver.FindElement(
+            By.XPath("//a[text()='Clean Code']/ancestor::article")
+        );
+
+        cardOfCleanCode.GetAttribute("class").Should().Be("card");
+
+        var firstSku = _driver.FindElement(
+            By.XPath("//dt[text()='SKU']/following-sibling::dd[1]")
+        );
+
+        firstSku.Text.Should().Be("BK-001");
+    }
+
+    [Fact]
+    public void AbsoluteXPath_WorksToday()
+    {
+        // may not works tomorrow
+        var h1 = _driver.FindElement(
+            By.XPath("/html/body/div/div/header/h1")
+        );
+
+        h1.Text.Should().Be("Library");
     }
 }
